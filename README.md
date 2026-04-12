@@ -380,7 +380,7 @@ python-dotenv>=1.0.0       # .env file loader
 
 Built by **Manu Naik** — AI & ML Engineer
 
-[![GitHub](https://img.shields.io/badge/GitHub-black?style=flat-square&logo=github)](https://github.com/YOUR_USERNAME)
+[![GitHub](https://img.shields.io/badge/GitHub-black?style=flat-square&logo=github)](https://github.com/manunaik111)
 
 ---
 
