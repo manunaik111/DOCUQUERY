@@ -1,0 +1,78 @@
+# ── Secrets & Environment ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pycache
+
+# ── Virtual Environments ────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# ── Distribution / Build ────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# ── Type checking & Linting ─────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+.pyre/
+.ruff_cache/
+
+# ── Testing ─────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.coveragerc
+
+# ── Jupyter ─────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Vector DB / ChromaDB ────────────────────────────────────────
+chroma_db/
+chromadb_data/
+*.db
+*.sqlite3
+
+# ── Uploaded / Temporary Files ──────────────────────────────────
+uploads/
+tmp/
+temp/
+*.tmp
+
+# ── ML Model Artifacts ──────────────────────────────────────────
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+# ── OS & Editor ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Logs ────────────────────────────────────────────────────────
+*.log
+logs/
