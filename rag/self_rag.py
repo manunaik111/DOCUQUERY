@@ -22,7 +22,7 @@ class RAGState(TypedDict):
 
 def get_llm():
     return ChatGroq(
-        model='llama-3.3-70b-versatile',
+        model='llama-3.1-8b-instant',
         temperature=0.1,
         groq_api_key=os.getenv('GROQ_API_KEY')
     )
@@ -42,17 +42,26 @@ def retrieve_node(state: RAGState) -> RAGState:
 
 # ── Node 3: Evaluate Retrieval ────────────────────────────────
 def evaluate_retrieval_node(state: RAGState) -> RAGState:
+    retry_count = state.get('retry_count', 0)
+
+    # Hard limit: force proceed and increment counter
+    if retry_count >= 1:
+        return {**state, 'retrieval_relevant': True, 'retry_count': retry_count + 1}
+
     llm = get_llm()
     context = '\n'.join([c['text'][:300] for c in state['chunks']])
     response = llm.invoke([
         SystemMessage(content='''You are a retrieval evaluator.
 Answer ONLY with YES or NO.
 YES = the retrieved chunks contain information relevant to answering the query.
-NO = the chunks are off-topic or don't address the query.'''),
+NO = the chunks are off-topic or do not address the query.'''),
         HumanMessage(content=f'Query: {state["optimized_query"]}\n\nChunks:\n{context}')
     ])
     relevant = 'YES' in response.content.upper()
-    return {**state, 'retrieval_relevant': relevant}
+
+    # If not relevant, increment retry so next time we force proceed
+    new_retry = retry_count + 1 if not relevant else retry_count
+    return {**state, 'retrieval_relevant': relevant, 'retry_count': new_retry}
 
 # ── Node 4: Generate Answer ───────────────────────────────────
 def generate_answer_node(state: RAGState) -> RAGState:
@@ -71,6 +80,12 @@ Cite page numbers.'''),
 
 # ── Node 5: Hallucination Check ───────────────────────────────
 def check_hallucination_node(state: RAGState) -> RAGState:
+    retry_count = state.get('retry_count', 0)
+
+    # Hard limit: force proceed
+    if retry_count >= 2:
+        return {**state, 'answer_grounded': True, 'retry_count': retry_count + 1}
+
     llm = get_llm()
     context = '\n'.join([c['text'] for c in state['chunks']])
     response = llm.invoke([
@@ -81,7 +96,10 @@ NO = the answer contains claims not found in the context.'''),
         HumanMessage(content=f'Context:\n{context}\n\nAnswer:\n{state["answer"]}')
     ])
     grounded = 'YES' in response.content.upper()
-    return {**state, 'answer_grounded': grounded}
+
+    # If not grounded, increment retry so next time we force proceed
+    new_retry = retry_count + 1 if not grounded else retry_count
+    return {**state, 'answer_grounded': grounded, 'retry_count': new_retry}
 
 # ── Node 6: Final Output ──────────────────────────────────────
 def final_output_node(state: RAGState) -> RAGState:
@@ -89,12 +107,12 @@ def final_output_node(state: RAGState) -> RAGState:
 
 # ── Conditional Edges ─────────────────────────────────────────
 def route_retrieval(state: RAGState) -> str:
-    if state['retrieval_relevant'] or state.get('retry_count', 0) >= 1:
+    if state['retrieval_relevant']:
         return 'generate'
     return 'retry'
 
 def route_hallucination(state: RAGState) -> str:
-    if state['answer_grounded'] or state.get('retry_count', 0) >= 1:
+    if state['answer_grounded']:
         return 'output'
     return 'regenerate'
 
