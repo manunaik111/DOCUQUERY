@@ -17,7 +17,8 @@ class RAGState(TypedDict):
     final_answer: str
     retrieval_relevant: bool
     answer_grounded: bool
-    retry_count: int
+    retrieval_retries: int   # counts retrieval retries only
+    hallucination_retries: int  # counts hallucination retries only
     searcher: object
 
 def get_llm():
@@ -42,11 +43,11 @@ def retrieve_node(state: RAGState) -> RAGState:
 
 # ── Node 3: Evaluate Retrieval ────────────────────────────────
 def evaluate_retrieval_node(state: RAGState) -> RAGState:
-    retry_count = state.get('retry_count', 0)
+    retrieval_retries = state.get('retrieval_retries', 0)
 
-    # Hard limit: force proceed and increment counter
-    if retry_count >= 1:
-        return {**state, 'retrieval_relevant': True, 'retry_count': retry_count + 1}
+    # Hard limit: already retried once, force proceed
+    if retrieval_retries >= 1:
+        return {**state, 'retrieval_relevant': True}
 
     llm = get_llm()
     context = '\n'.join([c['text'][:300] for c in state['chunks']])
@@ -59,9 +60,9 @@ NO = the chunks are off-topic or do not address the query.'''),
     ])
     relevant = 'YES' in response.content.upper()
 
-    # If not relevant, increment retry so next time we force proceed
-    new_retry = retry_count + 1 if not relevant else retry_count
-    return {**state, 'retrieval_relevant': relevant, 'retry_count': new_retry}
+    # Increment retrieval_retries if not relevant so next pass forces proceed
+    new_retries = retrieval_retries + 1 if not relevant else retrieval_retries
+    return {**state, 'retrieval_relevant': relevant, 'retrieval_retries': new_retries}
 
 # ── Node 4: Generate Answer ───────────────────────────────────
 def generate_answer_node(state: RAGState) -> RAGState:
@@ -80,11 +81,11 @@ Cite page numbers.'''),
 
 # ── Node 5: Hallucination Check ───────────────────────────────
 def check_hallucination_node(state: RAGState) -> RAGState:
-    retry_count = state.get('retry_count', 0)
+    hallucination_retries = state.get('hallucination_retries', 0)
 
-    # Hard limit: force proceed
-    if retry_count >= 2:
-        return {**state, 'answer_grounded': True, 'retry_count': retry_count + 1}
+    # Hard limit: already retried once, force proceed
+    if hallucination_retries >= 1:
+        return {**state, 'answer_grounded': True}
 
     llm = get_llm()
     context = '\n'.join([c['text'] for c in state['chunks']])
@@ -97,9 +98,9 @@ NO = the answer contains claims not found in the context.'''),
     ])
     grounded = 'YES' in response.content.upper()
 
-    # If not grounded, increment retry so next time we force proceed
-    new_retry = retry_count + 1 if not grounded else retry_count
-    return {**state, 'answer_grounded': grounded, 'retry_count': new_retry}
+    # Increment hallucination_retries if not grounded so next pass forces proceed
+    new_retries = hallucination_retries + 1 if not grounded else hallucination_retries
+    return {**state, 'answer_grounded': grounded, 'hallucination_retries': new_retries}
 
 # ── Node 6: Final Output ──────────────────────────────────────
 def final_output_node(state: RAGState) -> RAGState:
@@ -154,7 +155,8 @@ def run_self_rag(query: str, searcher) -> dict:
         final_answer='',
         retrieval_relevant=False,
         answer_grounded=False,
-        retry_count=0,
+        retrieval_retries=0,
+        hallucination_retries=0,
         searcher=searcher
     )
     result = graph.invoke(initial_state)
