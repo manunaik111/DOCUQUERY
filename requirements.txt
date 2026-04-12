@@ -11,8 +11,8 @@ langchain-community>=0.2.0
 langchain-groq>=0.1.0
 langchain-text-splitters>=0.2.0
 
-# Vector store — pinned to avoid OpenTelemetry conflict on Streamlit Cloud
-chromadb==0.4.24
+# Vector store
+chromadb>=0.5.0
 
 # Embeddings + Reranking
 sentence-transformers>=2.5.0
@@ -26,7 +26,5 @@ langgraph>=0.1.0
 # Environment variables
 python-dotenv>=1.0.0
 
-# Fix OpenTelemetry protobuf conflict
-opentelemetry-api==1.22.0
-opentelemetry-sdk==1.22.0
-protobuf>=3.20.0,<5.0.0
+# Pin numpy to avoid np.float_ removal in NumPy 2.0
+numpy<2.0.0
