@@ -17,12 +17,13 @@ class RAGState(TypedDict):
     final_answer: str
     retrieval_relevant: bool
     answer_grounded: bool
-    retry_count: int
+    retrieval_retries: int   # counts retrieval retries only
+    hallucination_retries: int  # counts hallucination retries only
     searcher: object
 
 def get_llm():
     return ChatGroq(
-        model='llama-3.3-70b-versatile',
+        model='llama-3.1-8b-instant',
         temperature=0.1,
         groq_api_key=os.getenv('GROQ_API_KEY')
     )
@@ -42,17 +43,26 @@ def retrieve_node(state: RAGState) -> RAGState:
 
 # ── Node 3: Evaluate Retrieval ────────────────────────────────
 def evaluate_retrieval_node(state: RAGState) -> RAGState:
+    retrieval_retries = state.get('retrieval_retries', 0)
+
+    # Hard limit: already retried once, force proceed
+    if retrieval_retries >= 1:
+        return {**state, 'retrieval_relevant': True}
+
     llm = get_llm()
     context = '\n'.join([c['text'][:300] for c in state['chunks']])
     response = llm.invoke([
         SystemMessage(content='''You are a retrieval evaluator.
 Answer ONLY with YES or NO.
 YES = the retrieved chunks contain information relevant to answering the query.
-NO = the chunks are off-topic or don't address the query.'''),
+NO = the chunks are off-topic or do not address the query.'''),
         HumanMessage(content=f'Query: {state["optimized_query"]}\n\nChunks:\n{context}')
     ])
     relevant = 'YES' in response.content.upper()
-    return {**state, 'retrieval_relevant': relevant}
+
+    # Increment retrieval_retries if not relevant so next pass forces proceed
+    new_retries = retrieval_retries + 1 if not relevant else retrieval_retries
+    return {**state, 'retrieval_relevant': relevant, 'retrieval_retries': new_retries}
 
 # ── Node 4: Generate Answer ───────────────────────────────────
 def generate_answer_node(state: RAGState) -> RAGState:
@@ -71,6 +81,12 @@ Cite page numbers.'''),
 
 # ── Node 5: Hallucination Check ───────────────────────────────
 def check_hallucination_node(state: RAGState) -> RAGState:
+    hallucination_retries = state.get('hallucination_retries', 0)
+
+    # Hard limit: already retried once, force proceed
+    if hallucination_retries >= 1:
+        return {**state, 'answer_grounded': True}
+
     llm = get_llm()
     context = '\n'.join([c['text'] for c in state['chunks']])
     response = llm.invoke([
@@ -81,7 +97,10 @@ NO = the answer contains claims not found in the context.'''),
         HumanMessage(content=f'Context:\n{context}\n\nAnswer:\n{state["answer"]}')
     ])
     grounded = 'YES' in response.content.upper()
-    return {**state, 'answer_grounded': grounded}
+
+    # Increment hallucination_retries if not grounded so next pass forces proceed
+    new_retries = hallucination_retries + 1 if not grounded else hallucination_retries
+    return {**state, 'answer_grounded': grounded, 'hallucination_retries': new_retries}
 
 # ── Node 6: Final Output ──────────────────────────────────────
 def final_output_node(state: RAGState) -> RAGState:
@@ -89,12 +108,12 @@ def final_output_node(state: RAGState) -> RAGState:
 
 # ── Conditional Edges ─────────────────────────────────────────
 def route_retrieval(state: RAGState) -> str:
-    if state['retrieval_relevant'] or state.get('retry_count', 0) >= 1:
+    if state['retrieval_relevant']:
         return 'generate'
     return 'retry'
 
 def route_hallucination(state: RAGState) -> str:
-    if state['answer_grounded'] or state.get('retry_count', 0) >= 1:
+    if state['answer_grounded']:
         return 'output'
     return 'regenerate'
 
@@ -136,7 +155,8 @@ def run_self_rag(query: str, searcher) -> dict:
         final_answer='',
         retrieval_relevant=False,
         answer_grounded=False,
-        retry_count=0,
+        retrieval_retries=0,
+        hallucination_retries=0,
         searcher=searcher
     )
     result = graph.invoke(initial_state)
