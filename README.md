@@ -46,6 +46,10 @@ Built with a brutalist, editorial design aesthetic and backed by a 5-stage AI pi
 | 🔬 **Full Pipeline Transparency** | Expanders show the optimized query, source pages, and per-chunk rerank scores |
 
 ---
+---
+## Live Address
+https://docuquery-002.streamlit.app/
+---
 
 ## ⚙️ Architecture
 
